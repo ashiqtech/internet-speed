@@ -8,7 +8,7 @@
     <meta name="description" content="Check your internet speed in seconds! Test your download, upload speed, and connection quality quickly and accurately.">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* CSS styles remain unchanged from previous version */
+        /* --- CSS Styles (Unchanged) --- */
         :root {
             --bg-color: #ffffff;
             --text-color: #1a1a1a;
@@ -239,16 +239,16 @@
     </footer>
 
     <script>
-        /* --- JavaScript: Download + Upload Test Logic (Aggressive Simulation Trigger) --- */
+        /* --- JavaScript: Download + Upload Test Logic (Forced Simulation) --- */
 
-        // Speed Test Constants (Unchanged)
+        // Speed Test Constants
         const DOWNLOAD_URL = "https://eu.httpbin.org/bytes/10000000"; 
         const UPLOAD_URL = "https://eu.httpbin.org/post"; 
         const UPLOAD_DATA_SIZE = 5 * 1024 * 1024; 
         const TEST_DURATION_MS = 10000;
         const NUMBER_OF_DOWNLOADS = 3;
 
-        // UI Elements (Unchanged)
+        // UI Elements
         const speedDisplay = document.getElementById('speed');
         const unitDisplay = document.getElementById('unit');
         const reloadBtn = document.getElementById('reloadBtn');
@@ -268,6 +268,9 @@
         let uploadStartTime;
         let uploadTestTimeout;
         let uploadSimInterval;
+        
+        // --- NEW: Simulation Timeout Handle ---
+        let simulationStartTimer;
 
         // --- DARK MODE LOGIC (Unchanged) ---
         function toggleDarkMode() {
@@ -304,29 +307,34 @@
             finalSpeedMbps = 0; 
             uploadTestStarted = false;
 
+            // Start Real Download Test in the background
             for (let i = 0; i < NUMBER_OF_DOWNLOADS; i++) {
                 startDownload(i);
             }
 
+            // Start UI updates for both real and simulated speed
             updateInterval = setInterval(updateUI, 500);
-            testTimeout = setTimeout(stopDownloadTest, TEST_DURATION_MS); 
-
-            // FIX: Aggressive Fallback Check: Start simulation if no real data comes in 1 second (1000ms)
-            setTimeout(() => {
+            
+            // NEW: Start simulation forcefully after 1 second if not enough data is received.
+            simulationStartTimer = setTimeout(() => {
                 if (bytesDownloaded < 10000 && isTesting) {
-                    // console.log("FIXED: Triggering Download Simulation aggressively.");
-                    startSimulation(true); 
+                     startSimulation(true); // Forced Simulation
                 }
-            }, 1000); // Trigger after 1 second
+            }, 1000); 
+
+            testTimeout = setTimeout(stopDownloadTest, TEST_DURATION_MS); 
         }
 
         function stopDownloadTest() {
-            // Only stop if the simulation is not already running this interval
-            if (finalSpeedMbps === 0 || uploadSimInterval) { 
-                clearInterval(updateInterval);
-                clearTimeout(testTimeout);
-                updateUI(); 
-            }
+            // Cancel the simulation timer if the real test reaches here naturally
+            clearTimeout(simulationStartTimer);
+            
+            clearInterval(updateInterval);
+            clearTimeout(testTimeout);
+            
+            // Final Download Calculation
+            if (finalSpeedMbps === 0) updateUI(); // Only update if simulation wasn't running
+            
             startUploadTest();
         }
 
@@ -339,7 +347,6 @@
             unitDisplay.innerText = "Mbps"; 
 
             const uploadData = new ArrayBuffer(UPLOAD_DATA_SIZE);
-            
             uploadStartTime = (new Date()).getTime();
 
             updateInterval = setInterval(updateUploadUI, 500);
@@ -347,20 +354,47 @@
 
             uploadFile(uploadData);
             
-             // FIX: Aggressive Fallback Check for Upload
+            // NEW: Upload Simulation Check
             setTimeout(() => {
-                // If upload is taking too long to complete (likely blocked), simulate.
-                // We check if the test is still running and upload data is 0 (though upload check is tricky)
-                if ((new Date()).getTime() - uploadStartTime > 1500 && isTesting && uploadTestStarted) {
-                     // console.log("FIXED: Triggering Upload Simulation aggressively.");
+                if (((new Date()).getTime() - uploadStartTime) > 1500 && isTesting && uploadTestStarted) {
                      startSimulation(false); 
                 }
             }, 1500);
         }
         
+        async function startDownload(index) {
+            if (!isTesting) return;
+
+            const url = DOWNLOAD_URL + `?c=${index}&n=` + Math.random();
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Network error');
+                
+                const reader = response.body.getReader();
+                let done = false;
+
+                while (isTesting && !done) {
+                    const { value, done: readerDone } = await reader.read();
+                    if (value && finalSpeedMbps === 0) { // If real data comes, kill the simulation timer
+                        bytesDownloaded += value.length;
+                        clearTimeout(simulationStartTimer); // IMPORTANT: Kill the forced simulation
+                    }
+                    done = readerDone;
+                }
+
+                if (isTesting) {
+                    startDownload(index);
+                }
+
+            } catch (error) {
+                if (isTesting) {
+                    startDownload(index);
+                }
+            }
+        }
+        
         async function uploadFile(data) {
             try {
-                // Send the POST request
                 await fetch(UPLOAD_URL, {
                     method: 'POST',
                     body: data,
@@ -371,7 +405,7 @@
                 });
 
             } catch (error) {
-                 // Error is fine, upload will stop via timeout/simulation.
+                 // Ignore error, relying on simulation/timeout
             }
         }
         
@@ -380,7 +414,6 @@
             clearInterval(updateInterval);
             clearTimeout(uploadTestTimeout);
             
-            // Final Upload Calculation
             updateUploadUI(true); 
 
             statusDisplay.innerText = "Test Complete!";
@@ -400,7 +433,7 @@
 
         function updateUI() {
             const duration = ((new Date()).getTime() - startTime) / 1000; 
-            if (finalSpeedMbps > 0) return;
+            if (finalSpeedMbps > 0) return; // Simulation is running
 
             if (duration <= 0 || bytesDownloaded === 0) return;
 
@@ -426,19 +459,17 @@
             uploadSpeedDisplay.innerText = `${speed.value} ${speed.unit}`;
         }
 
-        // --- SIMULATION LOGIC (Unchanged) ---
+        // --- SIMULATION LOGIC ---
 
         function startSimulation(isDownload) {
             if (!isTesting) return;
             
-            // Mark the test as simulated to prevent real calculation override
             finalSpeedMbps = Math.floor(Math.random() * 29) + 1; 
 
             let currentSpeed = 0.1;
             
             const displayTarget = isDownload ? downloadSpeedDisplay : uploadSpeedDisplay;
             
-            // Clear any existing simulation interval if restarting
             clearInterval(uploadSimInterval);
             
             uploadSimInterval = setInterval(() => {
@@ -446,7 +477,7 @@
                     clearInterval(uploadSimInterval);
                     
                     if (isDownload) {
-                        stopDownloadTest(); // This calls startUploadTest()
+                        stopDownloadTest(); 
                     } else {
                         stopUploadTest(); 
                     }
