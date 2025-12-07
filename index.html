@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Speed Indicator Online</title>
+    
+    <title>Test Internet Speed Online</title> 
+    <meta name="description" content="Check your internet speed in seconds! This quick test shows how fast your connection really is.">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* --- CSS: Base Variables --- */
@@ -36,7 +38,7 @@
             justify-content: space-between;
             align-items: center;
             overflow: hidden;
-            transition: background-color 0.3s, color 0.3s; /* Smooth transition */
+            transition: background-color 0.3s, color 0.3s;
         }
 
         /* Top Header */
@@ -90,7 +92,7 @@
             font-size: 180px;
             font-weight: 500;
             letter-spacing: -4px;
-            color: var(--speed-value-color); /* Uses variable for dynamic color */
+            color: var(--speed-value-color);
             line-height: 1;
         }
 
@@ -129,7 +131,7 @@
             transform: none;
         }
 
-        /* Mode Toggle Button (New) */
+        /* Mode Toggle Button */
         .mode-toggle {
             position: absolute;
             top: 35px;
@@ -151,7 +153,7 @@
 
         .social-icon {
             font-size: 28px;
-            color: var(--text-color); /* Changed color to adapt to dark mode */
+            color: var(--text-color); 
             text-decoration: none;
             transition: color 0.3s;
         }
@@ -160,7 +162,7 @@
         .social-icon:hover.telegram { color: #0088cc; }
         .social-icon:hover.twitter { color: #000; }
         .social-icon:hover.youtube { color: #ff0000; }
-        .dark-mode .social-icon:hover.twitter { color: #fff; } /* X/Twitter logo looks better white on hover in dark mode */
+        .dark-mode .social-icon:hover.twitter { color: #fff; } 
 
     </style>
 </head>
@@ -205,7 +207,7 @@
     <script>
         /* --- JavaScript: Hybrid Real Test (with Simulation Fallback) and Dark Mode Toggle --- */
 
-        // Existing speed test logic remains the same for functionality
+        // Speed Test Constants
         const TEST_FILE_URL = "https://eu.httpbin.org/bytes/5000000"; 
         const TEST_DURATION_MS = 10000;
         const NUMBER_OF_DOWNLOADS = 3;
@@ -222,22 +224,19 @@
         let startTime = 0;
         let finalSpeedMbps = 0;
 
-        // --- DARK MODE LOGIC (New) ---
+        // --- DARK MODE LOGIC ---
 
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode');
             
-            // Save user preference in local storage
             const isDarkMode = document.body.classList.contains('dark-mode');
             localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
             
-            // Change the icon based on the current mode
             modeToggleBtn.innerHTML = isDarkMode ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
         }
 
         function loadUserPreferences() {
             if (localStorage.getItem('darkMode') === 'enabled') {
-                // Apply dark mode immediately
                 document.body.classList.add('dark-mode');
                 modeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
             } else {
@@ -245,20 +244,19 @@
             }
         }
         
-        // --- SPEED TEST LOGIC (Previous working version) ---
+        // --- SPEED TEST LOGIC ---
 
         function startTest() {
             if (isTesting) return; 
             isTesting = true;
 
-            // Reset UI
             speedDisplay.innerText = "0";
             unitDisplay.innerText = "Mbps"; 
             reloadBtn.classList.add('disabled');
             
             bytesDownloaded = 0;
             startTime = (new Date()).getTime();
-            finalSpeedMbps = 0; // Reset simulation flag
+            finalSpeedMbps = 0; 
             
             for (let i = 0; i < NUMBER_OF_DOWNLOADS; i++) {
                 startDownload(i);
@@ -267,6 +265,7 @@
             updateInterval = setInterval(updateUI, 500);
             testTimeout = setTimeout(stopTest, TEST_DURATION_MS);
 
+            // Fallback Check: Start simulation if no real data comes in 1.5 seconds
             setTimeout(() => {
                 if (bytesDownloaded < 10000 && isTesting) {
                     startSimulation();
@@ -276,10 +275,12 @@
 
         async function startDownload(index) {
             if (!isTesting) return;
+
             const url = TEST_FILE_URL + `?c=${index}&n=` + Math.random();
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('Network error');
+                
                 const reader = response.body.getReader();
                 let done = false;
 
@@ -290,10 +291,15 @@
                     }
                     done = readerDone;
                 }
-                if (isTesting) startDownload(index);
+
+                if (isTesting) {
+                    startDownload(index);
+                }
 
             } catch (error) {
-                if (isTesting) startDownload(index);
+                if (isTesting) {
+                    startDownload(index);
+                }
             }
         }
 
@@ -307,6 +313,7 @@
                     clearInterval(simInterval);
                     return;
                 }
+                
                 currentSpeed += (finalSpeedMbps / 20);
                 currentSpeed = Math.min(currentSpeed, finalSpeedMbps);
                 
@@ -319,7 +326,6 @@
                 }
             }, 500);
         }
-
 
         function updateUI() {
             const duration = ((new Date()).getTime() - startTime) / 1000; 
