@@ -6,7 +6,7 @@
     <title>Speed Indicator Online</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* --- CSS: Fast.com Style & Layout --- */
+        /* --- CSS: Fast.com Style & Layout (No Change) --- */
         :root {
             --bg-color: #ffffff;
             --text-color: #1a1a1a;
@@ -22,7 +22,7 @@
             margin: 0;
             display: flex;
             flex-direction: column;
-            justify-content: space-between; /* Header top, Content center, Footer bottom */
+            justify-content: space-between;
             align-items: center;
             overflow: hidden;
         }
@@ -50,7 +50,7 @@
         /* Main Content Center */
         .main-container {
             text-align: center;
-            flex-grow: 1; /* Takes available space */
+            flex-grow: 1;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -74,7 +74,7 @@
         }
 
         .speed-value {
-            font-size: 180px; /* Big Font like Fast.com */
+            font-size: 180px;
             font-weight: 500;
             letter-spacing: -4px;
             color: #000;
@@ -97,7 +97,7 @@
         .btn-reload {
             background: transparent;
             border: 2px solid #e0e0e0;
-            border-radius: 50%; /* Circular button */
+            border-radius: 50%;
             width: 60px;
             height: 60px;
             cursor: pointer;
@@ -107,7 +107,7 @@
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
-            margin-top: 10px; /* Adjust position */
+            margin-top: 10px;
         }
 
         .btn-reload:hover {
@@ -138,7 +138,7 @@
         }
 
         .social-icon:hover.telegram { color: #0088cc; }
-        .social-icon:hover.twitter { color: #000; } /* X is black */
+        .social-icon:hover.twitter { color: #000; }
         .social-icon:hover.youtube { color: #ff0000; }
 
     </style>
@@ -178,16 +178,15 @@
     </footer>
 
     <script>
-        /* --- JavaScript: 10-Second Real Speed Test --- */
+        /* --- JavaScript: FIX for Real Speed Tracking (Continuous Download) --- */
 
-        // Using a larger file from a reliable CDN for better speed measurement over 10s
-        // Using a 10MB test file.
-        const TEST_FILE_URL = "http://speedtest.tele2.net/10MB.zip"; 
+        // NOTE: Using a URL that provides a large file and supports cross-origin requests.
+        // I am using a publicly available 5MB file for a stable test.
+        const TEST_FILE_URL = "http://212.183.133.177/5MB.zip"; 
         const TEST_DURATION_MS = 10000; // 10 seconds
 
         const speedDisplay = document.getElementById('speed');
         const unitDisplay = document.getElementById('unit');
-        const statusDisplay = document.getElementById('status');
         const reloadBtn = document.getElementById('reloadBtn');
         
         let testStartTime;
@@ -195,56 +194,64 @@
         let isTesting = false;
         let updateInterval;
         let testTimeout;
-        let xhr; // Keep reference to cancel download
+        let xhr; // Reference to the XMLHttpRequest object
 
         function startTest() {
-            if (isTesting) return; // Prevent multiple clicks
+            if (isTesting) return; 
             isTesting = true;
 
             // Reset UI
             speedDisplay.innerText = "0";
             unitDisplay.innerText = "Kbps";
-            reloadBtn.classList.add('disabled'); // Disable button during test
+            reloadBtn.classList.add('disabled');
             
-            // Add cache buster
-            const downloadUrl = TEST_FILE_URL + "?nn=" + (new Date()).getTime();
-
-            testStartTime = (new Date()).getTime();
+            // Reset counters
             totalBytesLoaded = 0;
+            testStartTime = (new Date()).getTime();
 
-            // Start Download
-            downloadFile(downloadUrl);
+            // Start the download loop
+            downloadFileLoop();
 
             // Start updating the UI periodically for fluctuation effect
-            updateInterval = setInterval(updateUI, 200); // Update every 200ms
+            updateInterval = setInterval(updateUI, 500); // Update every 500ms for smoother feel
 
             // Stop test after 10 seconds
             testTimeout = setTimeout(stopTest, TEST_DURATION_MS);
         }
 
-        function downloadFile(url) {
-            xhr = new XMLHttpRequest();
-            xhr.open("GET", url, true);
-            xhr.responseType = "blob"; // Important for correct size tracking
+        // Recursive function to continuously download the file for 10 seconds
+        function downloadFileLoop() {
+            if (!isTesting) return;
 
-            // Track progress
+            // Add cache buster and random part to ensure fresh download
+            const downloadUrl = TEST_FILE_URL + "?nn=" + Math.random();
+
+            xhr = new XMLHttpRequest();
+            xhr.open("GET", downloadUrl, true);
+            // We don't need responseType="blob" if we only care about progress
+            
+            // Track progress: The most crucial part for real-time speed
             xhr.onprogress = function(event) {
                 if (event.lengthComputable) {
-                    totalBytesLoaded = event.loaded;
+                    totalBytesLoaded += event.loaded; 
+                } else {
+                    // For files where size is unknown, we assume chunks are being loaded
+                    totalBytesLoaded = event.loaded; 
                 }
             };
 
+            // If the file finishes downloading before the 10s timeout, start the download again.
             xhr.onload = function() {
-                // If file finishes before 10s, start another download
+                // If test is still running, start over to keep the download flow continuous
                 if (isTesting) {
-                    downloadFile(url + "&p=" + Math.random());
+                    downloadFileLoop();
                 }
             };
 
             xhr.onerror = function() {
                 if (isTesting) {
-                    // Try again on error, or handle it
-                     downloadFile(url + "&r=" + Math.random());
+                    // Quick retry on error
+                    downloadFileLoop();
                 }
             };
             
@@ -268,17 +275,18 @@
             clearTimeout(testTimeout);
             
             if (xhr) {
-                xhr.abort(); // Stop the download
+                xhr.abort(); // Stop the active download request
             }
 
             // Final Calculation
-            updateUI(); // One last update for final speed
+            updateUI();
             
             reloadBtn.classList.remove('disabled');
         }
 
         // Core Calculation Logic
         function calculateAndDisplaySpeed(bytes, seconds) {
+            // Calculate instantaneous speed based on total downloaded over total time
             const bitsLoaded = bytes * 8;
             const speedBps = bitsLoaded / seconds;
             const speedKbps = speedBps / 1024;
@@ -288,9 +296,13 @@
             if (speedMbps > 1) {
                 speedDisplay.innerText = speedMbps.toFixed(1);
                 unitDisplay.innerText = "Mbps";
-            } else {
-                speedDisplay.innerText = speedKbps.toFixed(0);
+            } else if (speedKbps > 100) {
+                 speedDisplay.innerText = Math.round(speedKbps);
                 unitDisplay.innerText = "Kbps";
+            } else {
+                // To avoid showing 0.0 or very low Kbps at the start
+                speedDisplay.innerText = Math.max(0, speedMbps).toFixed(1); 
+                unitDisplay.innerText = "Mbps";
             }
         }
 
