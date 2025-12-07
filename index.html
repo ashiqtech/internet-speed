@@ -11,7 +11,6 @@
             --bg-color: #ffffff;
             --text-color: #1a1a1a;
             --accent-color: #2ecc71; /* Green */
-            --grey-color: #a0a0a0;
         }
 
         body {
@@ -140,7 +139,6 @@
         .social-icon:hover.telegram { color: #0088cc; }
         .social-icon:hover.twitter { color: #000; }
         .social-icon:hover.youtube { color: #ff0000; }
-
     </style>
 </head>
 <body>
@@ -178,12 +176,13 @@
     </footer>
 
     <script>
-        /* --- JavaScript: FIX for Real Speed Tracking (Continuous Download) --- */
+        /* --- JavaScript: Stable Multi-Chunk Download Logic --- */
 
-        // NOTE: Using a URL that provides a large file and supports cross-origin requests.
-        // I am using a publicly available 5MB file for a stable test.
-        const TEST_FILE_URL = "http://212.183.133.177/5MB.zip"; 
-        const TEST_DURATION_MS = 10000; // 10 seconds
+        // NOTE: Hum 4 chote files (chunks) ko ek saath download karenge.
+        // Ye URL 1MB ki dummy file deta hai aur CORS/Caching issues kam karta hai.
+        const TEST_CHUNK_URL = "http://212.183.133.177/1MB.zip";
+        const NUMBER_OF_CHUNKS = 4; // Total 4MB data will be downloaded
+        const TEST_DURATION_MS = 10000; // 10 seconds total test time
 
         const speedDisplay = document.getElementById('speed');
         const unitDisplay = document.getElementById('unit');
@@ -194,7 +193,7 @@
         let isTesting = false;
         let updateInterval;
         let testTimeout;
-        let xhr; // Reference to the XMLHttpRequest object
+        let activeXhrs = []; // Array to hold multiple XMLHttpRequest objects
 
         function startTest() {
             if (isTesting) return; 
@@ -202,63 +201,60 @@
 
             // Reset UI
             speedDisplay.innerText = "0";
-            unitDisplay.innerText = "Kbps";
+            unitDisplay.innerText = "Mbps"; // Start with Mbps
             reloadBtn.classList.add('disabled');
             
             // Reset counters
             totalBytesLoaded = 0;
             testStartTime = (new Date()).getTime();
 
-            // Start the download loop
-            downloadFileLoop();
+            // Start downloading all chunks simultaneously
+            for (let i = 0; i < NUMBER_OF_CHUNKS; i++) {
+                downloadChunk();
+            }
 
-            // Start updating the UI periodically for fluctuation effect
-            updateInterval = setInterval(updateUI, 500); // Update every 500ms for smoother feel
+            // Start updating the UI every 500ms
+            updateInterval = setInterval(updateUI, 500);
 
             // Stop test after 10 seconds
             testTimeout = setTimeout(stopTest, TEST_DURATION_MS);
         }
 
-        // Recursive function to continuously download the file for 10 seconds
-        function downloadFileLoop() {
-            if (!isTesting) return;
+        function downloadChunk() {
+            const downloadUrl = TEST_CHUNK_URL + "?nn=" + Math.random();
+            const xhr = new XMLHttpRequest();
+            activeXhrs.push(xhr);
 
-            // Add cache buster and random part to ensure fresh download
-            const downloadUrl = TEST_FILE_URL + "?nn=" + Math.random();
-
-            xhr = new XMLHttpRequest();
             xhr.open("GET", downloadUrl, true);
-            // We don't need responseType="blob" if we only care about progress
             
-            // Track progress: The most crucial part for real-time speed
+            // Track progress for THIS specific chunk
             xhr.onprogress = function(event) {
                 if (event.lengthComputable) {
+                    // Update totalBytesLoaded. Since we restart, this keeps track of ongoing data
                     totalBytesLoaded += event.loaded; 
-                } else {
-                    // For files where size is unknown, we assume chunks are being loaded
-                    totalBytesLoaded = event.loaded; 
                 }
             };
 
-            // If the file finishes downloading before the 10s timeout, start the download again.
+            // If chunk download finishes, restart this chunk to keep traffic flowing
             xhr.onload = function() {
-                // If test is still running, start over to keep the download flow continuous
                 if (isTesting) {
-                    downloadFileLoop();
+                    downloadChunk(); 
+                    // Remove current XHR from the active list
+                    activeXhrs = activeXhrs.filter(item => item !== xhr); 
                 }
             };
 
+            // Handle errors by restarting the chunk
             xhr.onerror = function() {
                 if (isTesting) {
-                    // Quick retry on error
-                    downloadFileLoop();
+                    downloadChunk();
+                    activeXhrs = activeXhrs.filter(item => item !== xhr); 
                 }
             };
             
             xhr.send();
         }
 
-        // Function to calculate and update UI during test
         function updateUI() {
             const currentTime = (new Date()).getTime();
             const duration = (currentTime - testStartTime) / 1000; // Seconds
@@ -268,15 +264,14 @@
             calculateAndDisplaySpeed(totalBytesLoaded, duration);
         }
 
-        // Function to stop test and show final result
         function stopTest() {
             isTesting = false;
             clearInterval(updateInterval);
             clearTimeout(testTimeout);
             
-            if (xhr) {
-                xhr.abort(); // Stop the active download request
-            }
+            // Abort all active downloads
+            activeXhrs.forEach(xhr => xhr.abort());
+            activeXhrs = [];
 
             // Final Calculation
             updateUI();
@@ -284,31 +279,25 @@
             reloadBtn.classList.remove('disabled');
         }
 
-        // Core Calculation Logic
         function calculateAndDisplaySpeed(bytes, seconds) {
-            // Calculate instantaneous speed based on total downloaded over total time
             const bitsLoaded = bytes * 8;
             const speedBps = bitsLoaded / seconds;
             const speedKbps = speedBps / 1024;
             const speedMbps = speedKbps / 1024;
 
-            // Display Logic (Fluctuating numbers)
-            if (speedMbps > 1) {
+            // Display Logic 
+            if (speedMbps >= 1) {
                 speedDisplay.innerText = speedMbps.toFixed(1);
                 unitDisplay.innerText = "Mbps";
-            } else if (speedKbps > 100) {
-                 speedDisplay.innerText = Math.round(speedKbps);
-                unitDisplay.innerText = "Kbps";
             } else {
-                // To avoid showing 0.0 or very low Kbps at the start
-                speedDisplay.innerText = Math.max(0, speedMbps).toFixed(1); 
-                unitDisplay.innerText = "Mbps";
+                // If less than 1 Mbps, show in Kbps (rounded)
+                speedDisplay.innerText = Math.round(speedKbps);
+                unitDisplay.innerText = "Kbps";
             }
         }
 
         // Start test automatically on page load
         window.onload = startTest;
-
     </script>
 </body>
 </html>
