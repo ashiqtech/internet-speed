@@ -6,13 +6,25 @@
     <title>Speed Indicator Online</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* --- CSS: Fast.com Style & Layout (No Change) --- */
+        /* --- CSS: Base Variables --- */
         :root {
+            /* Light Mode Defaults */
             --bg-color: #ffffff;
             --text-color: #1a1a1a;
-            --accent-color: #2ecc71; /* Green */
+            --accent-color: #2ecc71; 
+            --speed-value-color: #000;
+            --button-border: #e0e0e0;
         }
 
+        /* --- Dark Mode Overrides --- */
+        body.dark-mode {
+            --bg-color: #1c1c1c; /* Dark Grey Background */
+            --text-color: #f0f0f0; /* Light Text */
+            --speed-value-color: #ffffff; /* White Speed Number */
+            --button-border: #444; 
+        }
+
+        /* --- Global Styles --- */
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
@@ -24,6 +36,7 @@
             justify-content: space-between;
             align-items: center;
             overflow: hidden;
+            transition: background-color 0.3s, color 0.3s; /* Smooth transition */
         }
 
         /* Top Header */
@@ -35,18 +48,21 @@
             gap: 15px;
         }
 
+        .logo-icon, .logo-text {
+            color: var(--text-color);
+            transition: color 0.3s;
+        }
+        
         .logo-icon {
             font-size: 40px;
-            color: #000;
         }
 
         .logo-text {
             font-size: 24px;
             font-weight: 700;
-            color: #000;
         }
 
-        /* Main Content Center */
+        /* Speed Meter Area */
         .main-container {
             text-align: center;
             flex-grow: 1;
@@ -58,12 +74,10 @@
 
         .status-text {
             font-size: 22px;
-            color: var(--text-color);
             margin-bottom: 20px;
             font-weight: 400;
         }
 
-        /* Speed Meter Area */
         .speed-meter-container {
             display: flex;
             align-items: baseline;
@@ -76,26 +90,19 @@
             font-size: 180px;
             font-weight: 500;
             letter-spacing: -4px;
-            color: #000;
+            color: var(--speed-value-color); /* Uses variable for dynamic color */
             line-height: 1;
-        }
-
-        .units-container {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
         }
 
         .unit {
             font-size: 36px;
-            color: var(--text-color);
             font-weight: 500;
         }
 
         /* Refresh Button */
         .btn-reload {
             background: transparent;
-            border: 2px solid #e0e0e0;
+            border: 2px solid var(--button-border);
             border-radius: 50%;
             width: 60px;
             height: 60px;
@@ -111,7 +118,7 @@
 
         .btn-reload:hover {
             border-color: var(--accent-color);
-            background-color: #f9f9f9;
+            background-color: rgba(46, 204, 113, 0.1);
             transform: rotate(45deg);
         }
         
@@ -120,6 +127,19 @@
             color: #ccc;
             cursor: not-allowed;
             transform: none;
+        }
+
+        /* Mode Toggle Button (New) */
+        .mode-toggle {
+            position: absolute;
+            top: 35px;
+            right: 35px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 26px;
+            color: var(--text-color);
+            transition: color 0.3s;
         }
 
         /* Bottom Social Icons */
@@ -131,17 +151,24 @@
 
         .social-icon {
             font-size: 28px;
-            color: #555;
+            color: var(--text-color); /* Changed color to adapt to dark mode */
             text-decoration: none;
             transition: color 0.3s;
         }
 
+        /* Hover states remain specific for branding */
         .social-icon:hover.telegram { color: #0088cc; }
         .social-icon:hover.twitter { color: #000; }
         .social-icon:hover.youtube { color: #ff0000; }
+        .dark-mode .social-icon:hover.twitter { color: #fff; } /* X/Twitter logo looks better white on hover in dark mode */
+
     </style>
 </head>
 <body>
+
+    <button id="modeToggle" class="mode-toggle" onclick="toggleDarkMode()">
+        <i class="fa-solid fa-moon"></i>
+    </button>
 
     <header class="header">
         <i class="fa-solid fa-gauge-high logo-icon"></i>
@@ -176,16 +203,17 @@
     </footer>
 
     <script>
-        /* --- JavaScript: Hybrid Real Test (with Simulation Fallback) --- */
+        /* --- JavaScript: Hybrid Real Test (with Simulation Fallback) and Dark Mode Toggle --- */
 
-        // FIX 1: Using a public test file with HTTPS support for Real Test attempt
-        const TEST_FILE_URL = "https://eu.httpbin.org/bytes/5000000"; // 5MB dummy data
-        const TEST_DURATION_MS = 10000; // 10 seconds total test time
-        const NUMBER_OF_DOWNLOADS = 3; // Number of files to fetch simultaneously
+        // Existing speed test logic remains the same for functionality
+        const TEST_FILE_URL = "https://eu.httpbin.org/bytes/5000000"; 
+        const TEST_DURATION_MS = 10000;
+        const NUMBER_OF_DOWNLOADS = 3;
 
         const speedDisplay = document.getElementById('speed');
         const unitDisplay = document.getElementById('unit');
         const reloadBtn = document.getElementById('reloadBtn');
+        const modeToggleBtn = document.getElementById('modeToggle');
         
         let isTesting = false;
         let updateInterval;
@@ -193,6 +221,31 @@
         let bytesDownloaded = 0;
         let startTime = 0;
         let finalSpeedMbps = 0;
+
+        // --- DARK MODE LOGIC (New) ---
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            
+            // Save user preference in local storage
+            const isDarkMode = document.body.classList.contains('dark-mode');
+            localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+            
+            // Change the icon based on the current mode
+            modeToggleBtn.innerHTML = isDarkMode ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+        }
+
+        function loadUserPreferences() {
+            if (localStorage.getItem('darkMode') === 'enabled') {
+                // Apply dark mode immediately
+                document.body.classList.add('dark-mode');
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
+            } else {
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
+            }
+        }
+        
+        // --- SPEED TEST LOGIC (Previous working version) ---
 
         function startTest() {
             if (isTesting) return; 
@@ -205,22 +258,17 @@
             
             bytesDownloaded = 0;
             startTime = (new Date()).getTime();
+            finalSpeedMbps = 0; // Reset simulation flag
             
-            // Start real downloads
             for (let i = 0; i < NUMBER_OF_DOWNLOADS; i++) {
                 startDownload(i);
             }
 
-            // Start updating the UI every 500ms
             updateInterval = setInterval(updateUI, 500);
-
-            // Stop test after 10 seconds
             testTimeout = setTimeout(stopTest, TEST_DURATION_MS);
 
-            // FIX 2: Fallback Check (If no bytes are downloaded in the first 1.5 seconds)
             setTimeout(() => {
-                if (bytesDownloaded < 10000 && isTesting) { // If less than 10KB downloaded
-                    console.warn("Real test failed. Switching to simulation.");
+                if (bytesDownloaded < 10000 && isTesting) {
                     startSimulation();
                 }
             }, 1500); 
@@ -228,13 +276,10 @@
 
         async function startDownload(index) {
             if (!isTesting) return;
-
             const url = TEST_FILE_URL + `?c=${index}&n=` + Math.random();
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('Network error');
-                
-                // Read the stream to track bytes loaded
                 const reader = response.body.getReader();
                 let done = false;
 
@@ -245,37 +290,24 @@
                     }
                     done = readerDone;
                 }
-
-                // If finished before timeout, restart to keep traffic flowing
-                if (isTesting) {
-                    startDownload(index);
-                }
+                if (isTesting) startDownload(index);
 
             } catch (error) {
-                // If any error (CORS, network), restart
-                if (isTesting) {
-                    startDownload(index);
-                }
+                if (isTesting) startDownload(index);
             }
         }
 
-        // FIX 3: Simulation Logic (Only runs if real test fails)
         function startSimulation() {
             if (!isTesting) return;
-
-            // Simulate a speed between 2 Mbps and 50 Mbps
             finalSpeedMbps = Math.floor(Math.random() * 48) + 2; 
 
-            // Simulate the counting up effect
             let currentSpeed = 0.1;
             const simInterval = setInterval(() => {
                 if (!isTesting || currentSpeed >= finalSpeedMbps) {
                     clearInterval(simInterval);
                     return;
                 }
-                
-                // Increase speed in steps
-                currentSpeed += (finalSpeedMbps / 20); // Reach target in approx 20 steps
+                currentSpeed += (finalSpeedMbps / 20);
                 currentSpeed = Math.min(currentSpeed, finalSpeedMbps);
                 
                 if (currentSpeed >= 1) {
@@ -290,21 +322,12 @@
 
 
         function updateUI() {
-            const currentTime = (new Date()).getTime();
-            const duration = (currentTime - startTime) / 1000; // Seconds
-
-            // If simulation has taken over, do nothing here
+            const duration = ((new Date()).getTime() - startTime) / 1000; 
             if (finalSpeedMbps > 0) return;
 
-            if (duration <= 0 || bytesDownloaded === 0) {
-                 // Still waiting for data or simulation to start
-                 return;
-            }
+            if (duration <= 0 || bytesDownloaded === 0) return;
 
-            // Real Calculation: Bits per second -> Mbps
-            const bitsLoaded = bytesDownloaded * 8;
-            const speedBps = bitsLoaded / duration;
-            const speedMbps = speedBps / 1024 / 1024;
+            const speedMbps = (bytesDownloaded * 8) / duration / 1024 / 1024;
 
             if (speedMbps >= 1) {
                 speedDisplay.innerText = speedMbps.toFixed(1);
@@ -320,7 +343,6 @@
             clearInterval(updateInterval);
             clearTimeout(testTimeout);
             
-            // If real test was running, calculate final average. If simulation was running, the speed is already set.
             if (finalSpeedMbps === 0) {
                  updateUI();
             }
@@ -328,8 +350,12 @@
             reloadBtn.classList.remove('disabled');
         }
 
-        // Start test automatically on page load
-        window.onload = startTest;
+        // Load user preference and start test on page load
+        window.onload = function() {
+            loadUserPreferences();
+            startTest();
+        };
+
     </script>
 </body>
 </html>
