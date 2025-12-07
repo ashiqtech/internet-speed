@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internetspeed Test</title>
+    <style>
+        /* --- CSS: Styling for Fast.com look --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff;
+            color: #1a1a1a;
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        /* Meter Styling */
+        .speed-box {
+            position: relative;
+            display: inline-block;
+        }
+
+        .speed-value {
+            font-size: 140px;
+            font-weight: 300;
+            letter-spacing: -5px;
+            color: #000;
+            transition: color 0.3s;
+        }
+
+        .speed-value.finished {
+            color: #2ecc71; /* Green color when done */
+        }
+
+        .units {
+            font-size: 24px;
+            color: #888;
+            margin-top: -20px;
+            font-weight: 500;
+        }
+
+        .info-box {
+            margin-top: 40px;
+            color: #a0a0a0;
+            font-size: 14px;
+        }
+
+        .btn-reload {
+            margin-top: 30px;
+            padding: 10px 25px;
+            border: 2px solid #e0e0e0;
+            background: transparent;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            color: #555;
+            transition: all 0.2s;
+            display: none; /* Hidden until finished */
+        }
+
+        .btn-reload:hover {
+            border-color: #2ecc71;
+            color: #2ecc71;
+        }
+
+        /* Loading Animation (Spinner) */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2ecc71;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px auto;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="loader" class="loader"></div>
+
+        <div class="speed-box">
+            <div id="speed" class="speed-value">0</div>
+        </div>
+        <div id="unit" class="units">Kbps</div>
+
+        <div class="info-box">
+            <span id="status">Connecting...</span>
+        </div>
+
+        <button id="reloadBtn" class="btn-reload" onclick="startTest()">Test Again</button>
+    </div>
+
+    <script>
+        /* --- JavaScript: Real Speed Test Logic --- */
+
+        // Test File URL: Using a reliable large image from Wikipedia (CORS friendly)
+        // Note: For a professional app, host your own random binary file.
+        const TEST_FILE_URL = "https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg"; 
+        const TEST_FILE_SIZE = 1048000 * 1.5; // Approx 1.5 MB in bytes (Hardcoded for accuracy if header is missing)
+
+        const speedDisplay = document.getElementById('speed');
+        const unitDisplay = document.getElementById('unit');
+        const statusDisplay = document.getElementById('status');
+        const reloadBtn = document.getElementById('reloadBtn');
+        const loader = document.getElementById('loader');
+
+        // Main Function to Start Test
+        function startTest() {
+            // Reset UI
+            speedDisplay.innerText = "0";
+            speedDisplay.classList.remove('finished');
+            unitDisplay.innerText = "Kbps";
+            statusDisplay.innerText = "Testing download speed...";
+            reloadBtn.style.display = "none";
+            loader.style.display = "block";
+
+            // Add random parameter to bypass cache
+            const cacheBuster = "?nn=" + (new Date()).getTime();
+            const downloadUrl = TEST_FILE_URL + cacheBuster;
+
+            const startTime = (new Date()).getTime();
+
+            // Start Download
+            const download = new Image();
+            
+            download.onload = function () {
+                const endTime = (new Date()).getTime();
+                calculateSpeed(startTime, endTime);
+            };
+
+            download.onerror = function () {
+                statusDisplay.innerText = "Error connecting to server.";
+                loader.style.display = "none";
+                reloadBtn.style.display = "inline-block";
+            };
+
+            download.src = downloadUrl;
+            
+            // Simulate live counter while waiting (Visual effect only)
+            simulateLiveCounter();
+        }
+
+        // Calculate Final Speed
+        function calculateSpeed(startTime, endTime) {
+            const duration = (endTime - startTime) / 1000; // Seconds
+            const bitsLoaded = TEST_FILE_SIZE * 8; // Convert Bytes to Bits
+            const speedBps = bitsLoaded / duration; // Bits per second
+            const speedKbps = speedBps / 1024;
+            const speedMbps = speedKbps / 1024;
+
+            // Stop Loader
+            loader.style.display = "none";
+
+            // Display Logic
+            if (speedMbps > 1) {
+                animateValue(speedDisplay, 0, speedMbps.toFixed(1), 500);
+                unitDisplay.innerText = "Mbps";
+            } else {
+                animateValue(speedDisplay, 0, speedKbps.toFixed(0), 500);
+                unitDisplay.innerText = "Kbps";
+            }
+
+            statusDisplay.innerText = "Your internet speed";
+            speedDisplay.classList.add('finished');
+            reloadBtn.style.display = "inline-block";
+        }
+
+        // Visual Trick: Animate numbers slightly while downloading to look "alive"
+        function simulateLiveCounter() {
+            let count = 0;
+            const interval = setInterval(() => {
+                if(loader.style.display === "none") {
+                    clearInterval(interval);
+                    return;
+                }
+                // Just random fluctuation for visual feel before real result
+                count = Math.floor(Math.random() * 10) + 1; 
+                // We don't update the main display with fake data, 
+                // just keeping the logic ready if you want a fake progress bar.
+            }, 100);
+        }
+
+        // Animation function for the final number
+        function animateValue(obj, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.innerHTML = (progress * (end - start) + start).toFixed(end > 1 ? 1 : 0);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // Start test automatically on page load
+        window.onload = startTest;
+
+    </script>
+</body>
+</html>
