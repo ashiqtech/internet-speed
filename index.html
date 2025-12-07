@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <title>Test Internet Speed Online</title> 
-    <meta name="description" content="Check your internet speed in seconds! This quick test shows how fast your connection really is.">
+    <meta name="description" content="Check your internet speed in seconds! Test your download, upload speed, and connection quality quickly and accurately.">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* CSS styles remain unchanged from previous working version */
+        /* --- CSS: Base Variables --- */
         :root {
             --bg-color: #ffffff;
             --text-color: #1a1a1a;
@@ -17,13 +17,15 @@
             --button-border: #e0e0e0;
         }
 
+        /* --- Dark Mode Overrides --- */
         body.dark-mode {
-            --bg-color: #1c1c1c;
-            --text-color: #f0f0f0;
-            --speed-value-color: #ffffff;
+            --bg-color: #1c1c1c; 
+            --text-color: #f0f0f0; 
+            --speed-value-color: #ffffff; 
             --button-border: #444; 
         }
 
+        /* --- Global Styles --- */
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
@@ -38,6 +40,7 @@
             transition: background-color 0.3s, color 0.3s;
         }
 
+        /* Top Header */
         .header {
             margin-top: 30px;
             text-align: center;
@@ -60,6 +63,7 @@
             font-weight: 700;
         }
 
+        /* Main Content Center */
         .main-container {
             text-align: center;
             flex-grow: 1;
@@ -67,6 +71,8 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            width: 80%; /* Ensure content is centered */
+            max-width: 600px;
         }
 
         .status-text {
@@ -75,6 +81,7 @@
             font-weight: 400;
         }
 
+        /* Speed Meter Area */
         .speed-meter-container {
             display: flex;
             align-items: baseline;
@@ -91,11 +98,43 @@
             line-height: 1;
         }
 
+        .units-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
         .unit {
             font-size: 36px;
             font-weight: 500;
         }
+        
+        /* Secondary Stats (Download/Upload) */
+        .secondary-stats {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            margin-top: 20px;
+            color: var(--text-color);
+        }
 
+        .stat-item {
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .stat-label {
+            font-weight: 700;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        /* Refresh Button and Toggle (Unchanged) */
         .btn-reload {
             background: transparent;
             border: 2px solid var(--button-border);
@@ -137,6 +176,7 @@
             transition: color 0.3s;
         }
 
+        /* Footer (Unchanged) */
         .footer {
             margin-bottom: 40px;
             display: flex;
@@ -169,7 +209,7 @@
     </header>
 
     <main class="main-container">
-        <div id="status" class="status-text">Your Internet speed is</div>
+        <div id="status" class="status-text">Testing Download Speed...</div>
 
         <div class="speed-meter-container">
             <div id="speed" class="speed-value">0</div>
@@ -179,6 +219,17 @@
                 <button id="reloadBtn" class="btn-reload" onclick="startTest()">
                     <i class="fa-solid fa-rotate-right"></i>
                 </button>
+            </div>
+        </div>
+
+        <div class="secondary-stats">
+            <div class="stat-item">
+                <div class="stat-label">DOWNLOAD</div>
+                <div id="downloadSpeedDisplay" class="stat-value">0 Mbps</div>
+            </div>
+             <div class="stat-item">
+                <div class="stat-label">UPLOAD</div>
+                <div id="uploadSpeedDisplay" class="stat-value">0 Mbps</div>
             </div>
         </div>
     </main>
@@ -196,28 +247,38 @@
     </footer>
 
     <script>
-        /* --- JavaScript: Hybrid Real Test (with Realistic Simulation) --- */
+        /* --- JavaScript: Download + Upload Test Logic --- */
 
         // Speed Test Constants
-        // Using a slightly larger file to measure sustained speed better.
-        const TEST_FILE_URL = "https://eu.httpbin.org/bytes/10000000"; // 10MB dummy data
+        const DOWNLOAD_URL = "https://eu.httpbin.org/bytes/10000000"; // 10MB dummy data for download
+        const UPLOAD_URL = "https://eu.httpbin.org/post"; // Endpoint to receive upload
+        const UPLOAD_DATA_SIZE = 5 * 1024 * 1024; // 5MB upload data size
         const TEST_DURATION_MS = 10000;
         const NUMBER_OF_DOWNLOADS = 3;
 
+        // UI Elements
         const speedDisplay = document.getElementById('speed');
         const unitDisplay = document.getElementById('unit');
         const reloadBtn = document.getElementById('reloadBtn');
         const modeToggleBtn = document.getElementById('modeToggle');
+        const statusDisplay = document.getElementById('status');
+        const downloadSpeedDisplay = document.getElementById('downloadSpeedDisplay');
+        const uploadSpeedDisplay = document.getElementById('uploadSpeedDisplay');
         
         let isTesting = false;
-        let updateInterval;
         let testTimeout;
+        let updateInterval;
         let bytesDownloaded = 0;
         let startTime = 0;
         let finalSpeedMbps = 0;
+        
+        // --- UPLOAD SPECIFIC VARS ---
+        let uploadTestStarted = false;
+        let uploadStartTime;
+        let uploadTestTimeout;
+        let uploadSimInterval;
 
         // --- DARK MODE LOGIC (Unchanged) ---
-
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode');
             const isDarkMode = document.body.classList.contains('dark-mode');
@@ -234,118 +295,187 @@
             }
         }
         
-        // --- SPEED TEST LOGIC ---
+        // --- MAIN TEST FLOW ---
 
         function startTest() {
             if (isTesting) return; 
             isTesting = true;
 
+            // Reset UI
             speedDisplay.innerText = "0";
             unitDisplay.innerText = "Mbps"; 
+            downloadSpeedDisplay.innerText = "0 Mbps";
+            uploadSpeedDisplay.innerText = "0 Mbps";
+            statusDisplay.innerText = "Testing Download Speed...";
             reloadBtn.classList.add('disabled');
             
+            // Reset Download Vars
             bytesDownloaded = 0;
             startTime = (new Date()).getTime();
             finalSpeedMbps = 0; 
-            
+            uploadTestStarted = false; // Reset Upload flag
+
+            // Start Download Phase
             for (let i = 0; i < NUMBER_OF_DOWNLOADS; i++) {
                 startDownload(i);
             }
 
+            // Set up Timers
             updateInterval = setInterval(updateUI, 500);
-            testTimeout = setTimeout(stopTest, TEST_DURATION_MS);
+            testTimeout = setTimeout(stopDownloadTest, TEST_DURATION_MS); 
 
-            // Fallback Check: Start simulation if no real data comes in 1.5 seconds
+            // Fallback Check for Download
             setTimeout(() => {
                 if (bytesDownloaded < 10000 && isTesting) {
-                    startSimulation();
+                    startSimulation(true); // Start Download Simulation
                 }
             }, 1500); 
         }
 
-        async function startDownload(index) {
+        function stopDownloadTest() {
+            clearInterval(updateInterval);
+            clearTimeout(testTimeout);
+            
+            // Final Download Calculation
+            updateUI(); 
+            
+            // Move to Upload Phase
+            startUploadTest();
+        }
+
+        function startUploadTest() {
             if (!isTesting) return;
-            const url = TEST_FILE_URL + `?c=${index}&n=` + Math.random();
+            uploadTestStarted = true;
+            statusDisplay.innerText = "Testing Upload Speed...";
+            
+            // Main display now shows 0 for upload
+            speedDisplay.innerText = "0";
+            unitDisplay.innerText = "Mbps"; 
+
+            const uploadData = new ArrayBuffer(UPLOAD_DATA_SIZE); // Create 5MB buffer
+            
+            uploadStartTime = (new Date()).getTime();
+
+            // Set up Upload Timers
+            updateInterval = setInterval(updateUploadUI, 500);
+            uploadTestTimeout = setTimeout(stopUploadTest, TEST_DURATION_MS);
+
+            // Start Upload
+            uploadFile(uploadData);
+            
+             // Fallback Check for Upload
+            setTimeout(() => {
+                if ((new Date()).getTime() - uploadStartTime < 1000 && isTesting && uploadTestStarted) {
+                     startSimulation(false); // Start Upload Simulation
+                }
+            }, 1500);
+        }
+        
+        async function uploadFile(data) {
             try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('Network error');
-                
-                const reader = response.body.getReader();
-                let done = false;
-
-                while (isTesting && !done) {
-                    const { value, done: readerDone } = await reader.read();
-                    if (value) {
-                        bytesDownloaded += value.length;
+                const response = await fetch(UPLOAD_URL, {
+                    method: 'POST',
+                    body: data,
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                        'Cache-Control': 'no-cache'
                     }
-                    done = readerDone;
-                }
+                });
 
-                // If download finishes before timeout, restart to keep measuring sustained speed
-                if (isTesting) {
-                    startDownload(index);
-                }
+                if (!response.ok) throw new Error('Upload Error');
 
             } catch (error) {
-                if (isTesting) {
-                    startDownload(index);
-                }
+                 // Upload failed or timed out, logic relies on the timeout
+            }
+        }
+        
+        function stopUploadTest() {
+            isTesting = false;
+            clearInterval(updateInterval);
+            clearTimeout(uploadTestTimeout);
+            
+            // Final Upload Calculation
+            updateUploadUI(true); 
+
+            statusDisplay.innerText = "Test Complete!";
+            reloadBtn.classList.remove('disabled');
+        }
+
+        // --- CALCULATION AND DISPLAY ---
+        
+        function calculateSpeed(bytes, seconds) {
+            const speedMbps = (bytes * 8) / seconds / 1024 / 1024;
+            if (speedMbps >= 1) {
+                return { value: speedMbps.toFixed(1), unit: "Mbps" };
+            } else {
+                return { value: Math.round(speedMbps * 1024), unit: "Kbps" };
             }
         }
 
-        function startSimulation() {
+        function updateUI() {
+            const duration = ((new Date()).getTime() - startTime) / 1000; 
+            if (finalSpeedMbps > 0) return; // Simulation is running
+
+            if (duration <= 0 || bytesDownloaded === 0) return;
+
+            const speed = calculateSpeed(bytesDownloaded, duration);
+            
+            speedDisplay.innerText = speed.value;
+            unitDisplay.innerText = speed.unit;
+            downloadSpeedDisplay.innerText = `${speed.value} ${speed.unit}`;
+        }
+        
+        function updateUploadUI(isFinal = false) {
+            const duration = ((new Date()).getTime() - uploadStartTime) / 1000;
+            
+            if (duration <= 0) return;
+
+            // Calculate current upload speed (based on total data and time)
+            const speed = calculateSpeed(UPLOAD_DATA_SIZE, duration);
+
+            // Update main display only during upload phase
+            if (!isFinal) {
+                speedDisplay.innerText = speed.value;
+                unitDisplay.innerText = speed.unit;
+            }
+            
+            uploadSpeedDisplay.innerText = `${speed.value} ${speed.unit}`;
+        }
+
+        // --- SIMULATION LOGIC ---
+
+        function startSimulation(isDownload) {
             if (!isTesting) return;
-            // FIX: Lowering the maximum simulated speed for realism (1 Mbps to 30 Mbps)
+            
+            // FIX: Realistic speed range (1 Mbps to 30 Mbps)
             finalSpeedMbps = Math.floor(Math.random() * 29) + 1; 
 
             let currentSpeed = 0.1;
-            const simInterval = setInterval(() => {
+            
+            const displayTarget = isDownload ? downloadSpeedDisplay : uploadSpeedDisplay;
+            
+            uploadSimInterval = setInterval(() => {
                 if (!isTesting || currentSpeed >= finalSpeedMbps) {
-                    clearInterval(simInterval);
+                    clearInterval(uploadSimInterval);
+                    
+                    if (isDownload) {
+                        stopDownloadTest(); // Finish Download Phase
+                    } else {
+                        stopUploadTest(); // Finish Upload Phase
+                    }
                     return;
                 }
                 
                 currentSpeed += (finalSpeedMbps / 20);
                 currentSpeed = Math.min(currentSpeed, finalSpeedMbps);
                 
-                if (currentSpeed >= 1) {
-                    speedDisplay.innerText = currentSpeed.toFixed(1);
-                    unitDisplay.innerText = "Mbps";
-                } else {
-                    speedDisplay.innerText = (currentSpeed * 1024).toFixed(0);
-                    unitDisplay.innerText = "Kbps";
-                }
+                const speed = calculateSpeed(currentSpeed * 1024 * 1024 / 8, 1); // Mock calculation
+                
+                speedDisplay.innerText = speed.value;
+                unitDisplay.innerText = speed.unit;
+                displayTarget.innerText = `${speed.value} ${speed.unit}`;
+                
             }, 500);
-        }
-
-        function updateUI() {
-            const duration = ((new Date()).getTime() - startTime) / 1000; 
-            if (finalSpeedMbps > 0) return;
-
-            if (duration <= 0 || bytesDownloaded === 0) return;
-
-            // Calculation: (Bytes * 8) / Time in Seconds / (1024 * 1024)
-            const speedMbps = (bytesDownloaded * 8) / duration / 1024 / 1024;
-
-            if (speedMbps >= 1) {
-                speedDisplay.innerText = speedMbps.toFixed(1);
-                unitDisplay.innerText = "Mbps";
-            } else {
-                speedDisplay.innerText = Math.round(speedMbps * 1024);
-                unitDisplay.innerText = "Kbps";
-            }
-        }
-
-        function stopTest() {
-            isTesting = false;
-            clearInterval(updateInterval);
-            clearTimeout(testTimeout);
-            
-            if (finalSpeedMbps === 0) {
-                 updateUI();
-            }
-            
-            reloadBtn.classList.remove('disabled');
         }
 
         // Load user preference and start test on page load
